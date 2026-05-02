@@ -22,7 +22,7 @@ Platform beign targetted
 ------------------------
 - Aarch64
 
-TBD: Specific details about the HW platforms. Potentially iMX9 or Jetson Nano
+TBD: Specific details about the HW platforms. Potentially RPi or Jetson Nano
 
 Compiler
 --------
