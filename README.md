@@ -12,12 +12,17 @@ The goals of this exercise are:
 - Measure overhead.
 
 
-Platforms being targetted
+Operating systems
 --------------------------
 
 - Ubuntu 24
 - QNX8 (potentially)
 
+Platform beign targetted
+------------------------
+- Aarch64
+
+TBD: Specific details about the HW platforms. Potentially iMX9 or Jetson Nano
 
 Compiler
 --------
