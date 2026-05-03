@@ -10,6 +10,11 @@ class RoboticsRtDemoConan(ConanFile):
     settings = "os", "arch", "compiler", "build_type"
 
     def requirements(self):
+        self.requires("boost/1.85.0", options={
+            "without_locale": True,
+            "without_stacktrace": True,
+        })
+        self.requires("eigen/3.4.0")
         self.requires("ompl/1.7.0")
 
     def generate(self):

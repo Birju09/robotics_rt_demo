@@ -5,4 +5,8 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(ompl REQUIRED)
+find_package(Boost REQUIRED)
+find_package(Eigen3 REQUIRED)
+
+add_subdirectory(tests/examples)
 

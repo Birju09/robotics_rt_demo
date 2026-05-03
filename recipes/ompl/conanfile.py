@@ -69,8 +69,11 @@ class OmplConan(ConanFile):
         cmake.build()
 
     def package(self):
+        # First try to use CMake install
         cmake = CMake(self)
         cmake.install()
 
     def package_info(self):
         self.cpp_info.libs = ["ompl"]
+        self.cpp_info.includedirs = ["include"]
+        
