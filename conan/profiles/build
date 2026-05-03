@@ -1,0 +1,14 @@
+# Conan profile for the build machine (AArch64 Linux, Clang 22)
+# Used with -pr:b when cross-compiling, or as the default profile for native builds
+
+[settings]
+os=Linux
+arch=armv8
+compiler=clang
+compiler.version=22
+compiler.libcxx=libc++
+compiler.cppstd=17
+build_type=Release
+
+[conf]
+tools.cmake.cmaketoolchain:user_toolchain=["{{profile_dir}}/../../cmake/toolchain/clang22-aarch64.cmake"]
