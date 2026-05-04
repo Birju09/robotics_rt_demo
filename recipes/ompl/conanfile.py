@@ -75,5 +75,5 @@ class OmplConan(ConanFile):
 
     def package_info(self):
         self.cpp_info.libs = ["ompl"]
-        self.cpp_info.includedirs = ["include"]
-        
+        self.cpp_info.includedirs = ["include/ompl-1.7"]
+

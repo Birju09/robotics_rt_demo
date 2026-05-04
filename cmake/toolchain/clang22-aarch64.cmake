@@ -17,5 +17,5 @@ set(CMAKE_AR llvm-ar-22)
 set(CMAKE_RANLIB llvm-ranlib-22)
 set(CMAKE_LINKER_TYPE LLD)
 
-add_compile_options(-stdlib=libc++)
-add_link_options(-stdlib=libc++ --ld-path=ld.lld-22)
+#add_compile_options(-stdlib=libc++)
+add_link_options(--ld-path=ld.lld-22)
