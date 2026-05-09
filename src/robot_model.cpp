@@ -50,7 +50,6 @@ RobotModel::RobotModel(const std::string &urdf_path) {
         q_min_[joint_idx] = urdf_joint->limits->lower;
         q_max_[joint_idx] = urdf_joint->limits->upper;
       } else {
-        // Default limits if not specified
         q_min_[joint_idx] = -M_PI;
         q_max_[joint_idx] = M_PI;
       }
@@ -81,7 +80,8 @@ bool RobotModel::fk(const std::vector<double> &q, KDL::Frame &out_frame) const {
   }
 
   int ret = fk_solver_->JntToCart(q_kdl, out_frame);
-  return ret >= 0; // KDL returns >= 0 for success
+  // KDL returns >= 0 for success
+  return ret >= 0;
 }
 
 bool RobotModel::ik(const KDL::Frame &target, const std::vector<double> &q_seed,

@@ -17,14 +17,16 @@ void RTExecutor::setTrajectory(std::shared_ptr<const Trajectory> traj) {
 
 void RTExecutor::start() {
   if (running_.exchange(true)) {
-    return; // Already running
+    // Already running
+    return;
   }
   thread_ = std::thread(&RTExecutor::rtLoop, this);
 }
 
 void RTExecutor::stop() {
   if (!running_.exchange(false)) {
-    return; // Not running
+    // Not running
+    return;
   }
   if (thread_.joinable()) {
     thread_.join();
@@ -34,7 +36,8 @@ void RTExecutor::stop() {
 void RTExecutor::rtLoop() {
   // Set up SCHED_FIFO priority
   struct sched_param param;
-  param.sched_priority = 80; // High priority (0-99 for FIFO)
+  // High priority (0-99 for FIFO)
+  param.sched_priority = 80;
 
   int ret = pthread_setschedparam(pthread_self(), SCHED_FIFO, &param);
   if (ret != 0) {
@@ -65,7 +68,8 @@ void RTExecutor::rtLoop() {
   // Convert to nanoseconds for easier arithmetic
   uint64_t now_ns =
       static_cast<uint64_t>(now.tv_sec) * 1000000000UL + now.tv_nsec;
-  uint64_t tick_period_ns = 1000000UL; // 1ms = 1,000,000 ns
+  // 1ms = 1,000,000 ns
+  uint64_t tick_period_ns = 1000000UL;
   uint64_t next_tick_ns = now_ns + tick_period_ns;
 
   loop_time_s_ = 0.0;
@@ -99,7 +103,8 @@ void RTExecutor::rtLoop() {
     } else if (!last_q_.empty()) {
       q = last_q_;
     } else {
-      q.clear(); // No trajectory, no last position
+      // No trajectory, no last position
+      q.clear();
     }
 
     // Invoke output callback
@@ -109,7 +114,8 @@ void RTExecutor::rtLoop() {
 
     // Advance time for next iteration
     if (local_traj_ && loop_time_s_ <= local_traj_->duration_s) {
-      loop_time_s_ += 0.001; // 1ms
+      // 1ms
+      loop_time_s_ += 0.001;
     }
 
     // Sleep until next tick

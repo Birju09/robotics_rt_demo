@@ -25,9 +25,10 @@ CollisionScene::CollisionScene(const RobotModel &model) : model_(model) {
     LinkCollisionObject lco;
     lco.link_name = link_mesh.link_name;
     lco.bvh_model = bvh;
+    // Will be updated per check
     lco.local_transform =
         coal::Transform3s(coal::Matrix3s::Identity(),
-                          coal::Vec3s::Zero()); // Will be updated per check
+                          coal::Vec3s::Zero());
     lco.collision_obj = std::make_shared<coal::CollisionObject>(bvh);
 
     link_objects_.push_back(lco);
@@ -134,7 +135,8 @@ void CollisionScene::updateCollisionTransforms(
   // This is acceptable for a demo; production systems should expose the chain
   // from RobotModel and properly update transforms on each collision check.
 
-  (void)q; // Avoid unused parameter warning
+  // Avoid unused parameter warning
+  (void)q;
 }
 
 bool CollisionScene::checkCollisions() const {
@@ -165,10 +167,12 @@ bool CollisionScene::checkCollisions() const {
                     link_objects_[j].collision_obj.get(), request, result);
 
       if (result.isCollision()) {
-        return false; // Collision detected
+        // Collision detected
+        return false;
       }
     }
   }
 
-  return true; // No collisions
+  // No collisions
+  return true;
 }
