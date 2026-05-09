@@ -4,11 +4,11 @@ from conan.tools.files import get, copy
 import os
 
 
-class KdlParserConan(ConanFile):
-    name = "kdl_parser"
-    version = "2.10.0"
-    description = "KDL parser for converting URDF to KDL tree"
-    url = "https://github.com/ros/kdl_parser"
+class PluginlibConan(ConanFile):
+    name = "pluginlib"
+    version = "5.4.1"
+    description = "ROS2 plugin loader"
+    url = "https://github.com/ros/pluginlib"
     license = "BSD"
 
     settings = "os", "arch", "compiler", "build_type"
@@ -22,12 +22,11 @@ class KdlParserConan(ConanFile):
     }
 
     def requirements(self):
-        self.requires("orocos-kdl/1.5.1")
-        self.requires("urdfdom/4.0.0")
+        self.requires("class_loader/2.1.2")
 
     def source(self):
         get(self,
-            url="https://github.com/ros/kdl_parser/archive/refs/tags/{}.tar.gz".format(self.version),
+            url="https://github.com/ros/pluginlib/archive/refs/tags/{}.tar.gz".format(self.version),
             destination=self.source_folder,
             strip_root=True)
 
@@ -43,18 +42,16 @@ class KdlParserConan(ConanFile):
 
     def build(self):
         cmake = CMake(self)
-        cmake.configure(build_script_folder="kdl_parser")
+        cmake.configure(build_script_folder="pluginlib")
         cmake.build()
 
     def package(self):
         cmake = CMake(self)
         cmake.install()
-        # Also manually copy headers to ensure correct structure
-        src_headers = os.path.join(self.source_folder, "kdl_parser", "include", "kdl_parser")
-        dst_headers = os.path.join(self.package_folder, "include", "kdl_parser")
-        if os.path.exists(src_headers):
-            copy(self, "*", src=src_headers, dst=dst_headers, keep_path=True)
+        src = os.path.join(self.source_folder, "pluginlib", "include", "pluginlib")
+        if os.path.exists(src):
+            copy(self, "*", src=src, dst=os.path.join(self.package_folder, "include", "pluginlib"), keep_path=True)
 
     def package_info(self):
-        self.cpp_info.libs = ["kdl_parser"]
+        self.cpp_info.libs = []
         self.cpp_info.includedirs = ["include"]

@@ -11,16 +11,21 @@ class RoboticsRtDemoConan(ConanFile):
 
     def requirements(self):
         self.requires("boost/1.85.0", options={
-            "without_locale": True,
-            "without_stacktrace": True,
+            "boost/*:without_locale": True,
+            "boost/*:without_stacktrace": True,
         })
         self.requires("eigen/3.4.0")
         self.requires("ompl/1.7.0")
         self.requires("coal/3.0.0")
         self.requires("orocos-kdl/1.5.1")
-        self.requires("urdf/2.0.0")
+        self.requires("kdl_parser/2.10.0")
+        self.requires("urdf/2.14.0")
         self.requires("urdfdom_headers/1.0.6")
         self.requires("urdfdom/4.0.0")
+        self.requires("rcpputils/2.10.0")
+        self.requires("pluginlib/5.4.1")
+        self.requires("class_loader/2.1.2")
+        self.requires("ament_index_cpp/1.8.0")
         self.requires("assimp/5.3.1")
         self.requires("tinyxml2/10.0.0")
         self.requires("franka_description/2.7.0")

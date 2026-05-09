@@ -53,3 +53,16 @@ class UrdfdomConan(ConanFile):
         self.cpp_info.set_property("cmake_find_mode", "both")
         self.cpp_info.libs = ["urdfdom_model", "urdfdom_world", "urdfdom_sensor"]
         self.cpp_info.includedirs = ["include/urdfdom"]
+
+        # Create aliases for individual libraries
+        self.cpp_info.set_property("cmake_file_name", "urdfdom")
+        self.cpp_info.components["model"].set_property("cmake_target_name", "urdfdom::urdfdom_model")
+        self.cpp_info.components["model"].libs = ["urdfdom_model"]
+
+        self.cpp_info.components["world"].set_property("cmake_target_name", "urdfdom::urdfdom_world")
+        self.cpp_info.components["world"].libs = ["urdfdom_world"]
+        self.cpp_info.components["world"].requires = ["model"]
+
+        self.cpp_info.components["sensor"].set_property("cmake_target_name", "urdfdom::urdfdom_sensor")
+        self.cpp_info.components["sensor"].libs = ["urdfdom_sensor"]
+        self.cpp_info.components["sensor"].requires = ["model"]

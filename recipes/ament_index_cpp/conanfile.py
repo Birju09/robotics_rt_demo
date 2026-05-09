@@ -4,12 +4,12 @@ from conan.tools.files import get, copy
 import os
 
 
-class KdlParserConan(ConanFile):
-    name = "kdl_parser"
-    version = "2.10.0"
-    description = "KDL parser for converting URDF to KDL tree"
-    url = "https://github.com/ros/kdl_parser"
-    license = "BSD"
+class AmentIndexCppConan(ConanFile):
+    name = "ament_index_cpp"
+    version = "1.8.0"
+    description = "ROS2 ament index C++ library"
+    url = "https://github.com/ament/ament_index"
+    license = "Apache-2.0"
 
     settings = "os", "arch", "compiler", "build_type"
     options = {
@@ -21,13 +21,9 @@ class KdlParserConan(ConanFile):
         "fPIC": True,
     }
 
-    def requirements(self):
-        self.requires("orocos-kdl/1.5.1")
-        self.requires("urdfdom/4.0.0")
-
     def source(self):
         get(self,
-            url="https://github.com/ros/kdl_parser/archive/refs/tags/{}.tar.gz".format(self.version),
+            url="https://github.com/ament/ament_index/archive/refs/tags/{}.tar.gz".format(self.version),
             destination=self.source_folder,
             strip_root=True)
 
@@ -43,18 +39,16 @@ class KdlParserConan(ConanFile):
 
     def build(self):
         cmake = CMake(self)
-        cmake.configure(build_script_folder="kdl_parser")
+        cmake.configure(build_script_folder="ament_index_cpp")
         cmake.build()
 
     def package(self):
         cmake = CMake(self)
         cmake.install()
-        # Also manually copy headers to ensure correct structure
-        src_headers = os.path.join(self.source_folder, "kdl_parser", "include", "kdl_parser")
-        dst_headers = os.path.join(self.package_folder, "include", "kdl_parser")
-        if os.path.exists(src_headers):
-            copy(self, "*", src=src_headers, dst=dst_headers, keep_path=True)
+        src = os.path.join(self.source_folder, "ament_index_cpp", "include", "ament_index_cpp")
+        if os.path.exists(src):
+            copy(self, "*", src=src, dst=os.path.join(self.package_folder, "include", "ament_index_cpp"), keep_path=True)
 
     def package_info(self):
-        self.cpp_info.libs = ["kdl_parser"]
+        self.cpp_info.libs = ["ament_index_cpp"]
         self.cpp_info.includedirs = ["include"]
