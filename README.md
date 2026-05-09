@@ -22,8 +22,15 @@ Platform beign targetted
 ------------------------
 - Aarch64
 
-TBD: Specific details about the HW platforms. Potentially RPi or Jetson Nano
+Hardware Platform
+-----------------
+- FRDM iMX95
 
 Compiler
 --------
 - Clang 22.1
+
+
+Package Management
+--------
+- Conan
