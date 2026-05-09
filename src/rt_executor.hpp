@@ -10,63 +10,49 @@
 #include <thread>
 #include <vector>
 
-/**
- * @brief RTExecutor runs a 1kHz real-time thread for trajectory playback.
- *
- * Responsibilities:
- *  - Run on POSIX SCHED_FIFO with high priority
- *  - Accept trajectory updates via lock-free handoff
- *  - Evaluate cubic spline trajectory at each 1ms tick
- *  - Invoke output callback with current joint positions
- */
+//! RTExecutor runs a 1kHz real-time thread for trajectory playback.
+//!
+//! Responsibilities:
+//!  - Run on POSIX SCHED_FIFO with high priority
+//!  - Accept trajectory updates via lock-free handoff
+//!  - Evaluate cubic spline trajectory at each 1ms tick
+//!  - Invoke output callback with current joint positions
 class RTExecutor {
 public:
   using OutputCallback =
       std::function<void(double time_s, const std::vector<double> &q)>;
 
-  /**
-   * @brief Construct RT executor.
-   * @param on_tick Callback invoked at each 1kHz tick with current time and
-   * joint positions
-   */
+  //! Construct RT executor.
+  //!
+  //! @param on_tick Callback invoked at each 1kHz tick with current time and joint positions
   explicit RTExecutor(OutputCallback on_tick);
 
   ~RTExecutor();
 
-  /**
-   * @brief Update the active trajectory.
-   *
-   * Can be called safely from any thread. Uses a mutex for thread-safe
-   * handoff. The RT thread will pick up the new trajectory at the next tick.
-   *
-   * @param traj New trajectory to execute (or nullptr to hold last position)
-   */
+  //! Update the active trajectory.
+  //!
+  //! Can be called safely from any thread. Uses a mutex for thread-safe
+  //! handoff. The RT thread will pick up the new trajectory at the next tick.
+  //!
+  //! @param traj New trajectory to execute (or nullptr to hold last position)
   void setTrajectory(std::shared_ptr<const Trajectory> traj);
 
-  /**
-   * @brief Start the RT thread.
-   *
-   * Sets up POSIX SCHED_FIFO priority and CPU affinity.
-   * Requires CAP_SYS_NICE capability (or run as root in Docker).
-   */
+  //! Start the RT thread.
+  //!
+  //! Sets up POSIX SCHED_FIFO priority and CPU affinity.
+  //! Requires CAP_SYS_NICE capability (or run as root in Docker).
   void start();
 
-  /**
-   * @brief Stop the RT thread and join.
-   */
+  //! Stop the RT thread and join.
   void stop();
 
-  /**
-   * @brief Check if RT executor is running.
-   */
+  //! Check if RT executor is running.
   bool isRunning() const { return running_.load(); }
 
 private:
-  /**
-   * @brief Main loop of the RT thread.
-   *
-   * Runs at 1kHz using clock_nanosleep with TIMER_ABSTIME for precise timing.
-   */
+  //! Main loop of the RT thread.
+  //!
+  //! Runs at 1kHz using clock_nanosleep with TIMER_ABSTIME for precise timing.
   void rtLoop();
 
   std::shared_ptr<const Trajectory> active_traj_{nullptr};
