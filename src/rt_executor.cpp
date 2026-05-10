@@ -84,7 +84,8 @@ void RTExecutor::rtLoop() {
   std::cout << "RTExecutor: 1kHz loop stopped" << std::endl;
 }
 
-void RTExecutor::performLoopIteration(uint64_t &next_tick_ns)
+[[clang::xray_always_instrument]] void
+RTExecutor::performLoopIteration(uint64_t &next_tick_ns)
     [[clang::nonallocating]] {
   // Load trajectory (mutex synchronizes with planning thread)
   std::shared_ptr<const Trajectory> traj_ptr;

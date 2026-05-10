@@ -43,5 +43,8 @@ install(TARGETS robot_core
     ARCHIVE DESTINATION lib
 )
 
-target_compile_options(robot_core PRIVATE "-fsanitize=realtime")
-target_link_libraries(robot_core PRIVATE "-fsanitize=realtime")
+target_compile_options(robot_core PRIVATE 
+        -fxray-instrument 
+        -fxray-instruction-threshold=100 
+        -fxray-ignore-loops
+    )
