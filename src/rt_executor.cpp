@@ -78,60 +78,65 @@ void RTExecutor::rtLoop() {
   std::cout << "RTExecutor: 1kHz loop started" << std::endl;
 
   while (running_.load(std::memory_order_acquire)) {
-    // Load trajectory (mutex synchronizes with planning thread)
-    std::shared_ptr<const Trajectory> traj_ptr;
-    {
-      std::lock_guard<std::mutex> lock(traj_mutex_);
-      traj_ptr = active_traj_;
-    }
-
-    // If trajectory pointer changed, reset loop time
-    if (traj_ptr != local_traj_) {
-      local_traj_ = traj_ptr;
-      loop_time_s_ = 0.0;
-      last_q_.clear();
-      if (local_traj_) {
-        std::cout << "RTExecutor: new trajectory loaded" << std::endl;
-      }
-    }
-
-    // Evaluate trajectory or hold last position
-    std::vector<double> q;
-    if (local_traj_ && loop_time_s_ <= local_traj_->duration_s) {
-      q = local_traj_->eval(loop_time_s_);
-      last_q_ = q;
-    } else if (!last_q_.empty()) {
-      q = last_q_;
-    } else {
-      // No trajectory, no last position
-      q.clear();
-    }
-
-    // Invoke output callback
-    if (!q.empty()) {
-      on_tick_(loop_time_s_, q);
-    }
-
-    // Advance time for next iteration
-    if (local_traj_ && loop_time_s_ <= local_traj_->duration_s) {
-      // 1ms
-      loop_time_s_ += 0.001;
-    }
-
-    // Sleep until next tick
-    // Use clock_nanosleep with TIMER_ABSTIME for absolute wake time
-    struct timespec abs_time;
-    abs_time.tv_sec = static_cast<time_t>(next_tick_ns / 1000000000UL);
-    abs_time.tv_nsec = static_cast<long>(next_tick_ns % 1000000000UL);
-
-    ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &abs_time, nullptr);
-    if (ret != 0 && ret != EINTR) {
-      std::cerr << "RTExecutor: clock_nanosleep failed with error " << ret
-                << std::endl;
-    }
-
-    next_tick_ns += tick_period_ns;
+    performLoopIteration(next_tick_ns);
   }
 
   std::cout << "RTExecutor: 1kHz loop stopped" << std::endl;
+}
+
+void RTExecutor::performLoopIteration(uint64_t &next_tick_ns)
+    [[clang::nonallocating]] {
+  // Load trajectory (mutex synchronizes with planning thread)
+  std::shared_ptr<const Trajectory> traj_ptr;
+  {
+    std::lock_guard<std::mutex> lock(traj_mutex_);
+    traj_ptr = active_traj_;
+  }
+
+  // If trajectory pointer changed, reset loop time
+  if (traj_ptr != local_traj_) {
+    local_traj_ = traj_ptr;
+    loop_time_s_ = 0.0;
+    last_q_.clear();
+    if (local_traj_) {
+      std::cout << "RTExecutor: new trajectory loaded" << std::endl;
+    }
+  }
+
+  // Evaluate trajectory or hold last position
+  std::vector<double> q;
+  if (local_traj_ && loop_time_s_ <= local_traj_->duration_s) {
+    q = local_traj_->eval(loop_time_s_);
+    last_q_ = q;
+  } else if (!last_q_.empty()) {
+    q = last_q_;
+  } else {
+    // No trajectory, no last position
+    q.clear();
+  }
+
+  // Invoke output callback
+  if (!q.empty()) {
+    on_tick_(loop_time_s_, q);
+  }
+
+  // Advance time for next iteration
+  if (local_traj_ && loop_time_s_ <= local_traj_->duration_s) {
+    // 1ms
+    loop_time_s_ += 0.001;
+  }
+
+  // Sleep until next tick
+  // Use clock_nanosleep with TIMER_ABSTIME for absolute wake time
+  struct timespec abs_time;
+  abs_time.tv_sec = static_cast<time_t>(next_tick_ns / 1000000000UL);
+  abs_time.tv_nsec = static_cast<long>(next_tick_ns % 1000000000UL);
+
+  int ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &abs_time, nullptr);
+  if (ret != 0 && ret != EINTR) {
+    std::cerr << "RTExecutor: clock_nanosleep failed with error " << ret
+              << std::endl;
+  }
+
+  next_tick_ns += 1000000UL; // 1ms = 1,000,000 ns
 }

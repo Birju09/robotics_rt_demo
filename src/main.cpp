@@ -76,19 +76,18 @@ int main() {
     // (This is a relative target; exact values depend on Franka forward
     // kinematics)
     KDL::Frame target;
-    target.p = KDL::Vector(
-        0.3, 0.2, 0.5); // Rough estimate, will be refined by visualization
-    target.M = KDL::Rotation::Identity(); // Identity orientation
+    target.p = KDL::Vector(0.1, 0.2, 0.5);
+    target.M = KDL::Rotation::Identity();
 
-    planner.requestPlan(target, 5.0, q_current); // 5 second trajectory duration
+    planner.requestPlan(target, 4.0, q_current);
     std::cout << std::endl;
 
-    // Let the demo run for 30 seconds
-    std::cout << "Demo running for 30 seconds..." << std::endl;
+    // Let the demo run for 12 seconds
+    std::cout << "Demo running for 12 seconds..." << std::endl;
     std::cout
         << "  (Planning in background, trajectory will play back when ready)"
         << std::endl;
-    std::this_thread::sleep_for(std::chrono::seconds(30));
+    std::this_thread::sleep_for(std::chrono::seconds(12));
 
     // Shutdown
     std::cout << std::endl;

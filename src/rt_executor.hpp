@@ -14,7 +14,7 @@
 //!
 //! Responsibilities:
 //!  - Run on POSIX SCHED_FIFO with high priority
-//!  - Accept trajectory updates via lock-free handoff
+//!  - Accept trajectory updates via mutex-protected handoff
 //!  - Evaluate cubic spline trajectory at each 1ms tick
 //!  - Invoke output callback with current joint positions
 class RTExecutor {
@@ -24,7 +24,8 @@ public:
 
   //! Construct RT executor.
   //!
-  //! @param on_tick Callback invoked at each 1kHz tick with current time and joint positions
+  //! @param on_tick Callback invoked at each 1kHz tick with current time and
+  //! joint positions
   explicit RTExecutor(OutputCallback on_tick);
 
   ~RTExecutor();
@@ -54,6 +55,12 @@ private:
   //!
   //! Runs at 1kHz using clock_nanosleep with TIMER_ABSTIME for precise timing.
   void rtLoop();
+
+  //! Single iteration of the main loop.
+  //!
+  //! Handles trajectory evaluation, callback invocation, and next tick
+  //! scheduling.
+  void performLoopIteration(uint64_t &next_tick_ns);
 
   std::shared_ptr<const Trajectory> active_traj_{nullptr};
   mutable std::mutex traj_mutex_;

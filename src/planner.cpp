@@ -76,6 +76,14 @@ void Planner::planningLoop() {
       continue;
     }
 
+    std::cout << "Goal config : [";
+    for (size_t i = 0; i < q_goal.size(); ++i) {
+      if (i > 0)
+        std::cout << ", ";
+      std::cout << q_goal[i];
+    }
+    std::cout << "]" << std::endl;
+
     std::cout << "Planner: IK succeeded, running OMPL..." << std::endl;
 
     // Run OMPL to find path from current to goal

@@ -42,3 +42,6 @@ install(TARGETS robot_core
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
 )
+
+target_compile_options(robot_core PRIVATE "-fsanitize=realtime")
+target_link_libraries(robot_core PRIVATE "-fsanitize=realtime")
