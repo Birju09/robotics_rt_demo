@@ -83,7 +83,8 @@ private:
   //! @param q_start Starting joint configuration
   //! @param q_goal Goal joint configuration
   //! @param time_limit_s Time limit for planning
-  //! @return Sequence of joint configurations if successful, empty vector otherwise
+  //! @return Sequence of joint configurations if successful, empty vector
+  //! otherwise
   std::vector<std::vector<double>> runOMPL(const std::vector<double> &q_start,
                                            const std::vector<double> &q_goal,
                                            double time_limit_s);

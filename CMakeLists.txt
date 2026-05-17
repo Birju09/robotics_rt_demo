@@ -4,6 +4,11 @@ project(robotics_rt_demo CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Set default install prefix to /app/install
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+  set(CMAKE_INSTALL_PREFIX "/app/install" CACHE PATH "Installation prefix" FORCE)
+endif()
+
 
 find_package(ompl REQUIRED CONFIG)
 find_package(Boost REQUIRED CONFIG)
@@ -23,4 +28,3 @@ find_package(TinyXML2 REQUIRED CONFIG)
 
 add_subdirectory(tests/examples)
 add_subdirectory(src)
-

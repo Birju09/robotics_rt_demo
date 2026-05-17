@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  # Development build - with volume mount for source code
+  builder:
+    build:
+      context: .
+      target: builder
+      dockerfile: Dockerfile
+      args:
+        BUILD_TYPE: Release
+    image: robotics_rt_demo:builder
+    cap_add:
+      - SYS_NICE
+    ulimits:
+      rtprio: 99
+    volumes:
+      # Mount entire project directory
+      - .:/app:rw
+      # Persist Conan cache for faster rebuilds
+      - ~/.conan2:/root/.conan2:rw
+    working_dir: /app
+    environment:
+      PATH: /opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      CC: clang-22
+      CXX: clang++-22
+    stdin_open: true
+    tty: true

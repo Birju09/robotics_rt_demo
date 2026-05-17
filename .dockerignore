@@ -1,0 +1,13 @@
+build
+.git
+.gitignore
+.vscode
+.claude
+cmake-build-*
+*.swp
+*.swo
+*~
+.DS_Store
+__pycache__
+*.pyc
+node_modules

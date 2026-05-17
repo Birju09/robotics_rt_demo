@@ -8,13 +8,13 @@ std::vector<double> Trajectory::eval(double t) const {
   // Clamp t to [0, duration_s]
   t = std::max(0.0, std::min(t, duration_s));
 
-  std::vector<double> result(num_joints, 0.0);
+  std::vector<double> result(num_dofs, 0.0);
 
   if (segments.empty() || segments[0].empty()) {
     return result;
   }
 
-  // Find the segment containing time t using binary search
+  // Find the segment containing time t
   int seg_idx = 0;
   for (int i = 0; i < num_segments; ++i) {
     if (segments[0][i].t_start <= t &&
@@ -24,12 +24,12 @@ std::vector<double> Trajectory::eval(double t) const {
     }
   }
 
-  // Evaluate each joint at time t
-  for (int j = 0; j < num_joints; ++j) {
+  // Evaluate each DOF at time t
+  for (int j = 0; j < num_dofs; ++j) {
     const Segment &seg = segments[j][seg_idx];
     double tau = t - seg.t_start; // local time within segment
 
-    // Cubic evaluation: q(tau) = a + b*tau + c*tau^2 + d*tau^3
+    // Cubic evaluation: x(tau) = a + b*tau + c*tau^2 + d*tau^3
     result[j] = seg.coeff[0] + seg.coeff[1] * tau + seg.coeff[2] * tau * tau +
                 seg.coeff[3] * tau * tau * tau;
   }
@@ -52,11 +52,11 @@ Trajectory fitCubicSpline(const std::vector<std::vector<double>> &waypoints,
     return traj;
   }
 
-  int n_joints = waypoints[0].size();
+  int n_dofs = waypoints[0].size();
   int n_segments = n_wp - 1;
 
   traj.duration_s = duration_s;
-  traj.num_joints = n_joints;
+  traj.num_dofs = n_dofs;
   traj.num_segments = n_segments;
 
   // Uniform time parameterization
@@ -71,11 +71,11 @@ Trajectory fitCubicSpline(const std::vector<std::vector<double>> &waypoints,
     h[i] = t_knots[i + 1] - t_knots[i];
   }
 
-  // For each joint, fit a natural cubic spline
-  traj.segments.resize(n_joints);
+  // For each DOF, fit a natural cubic spline
+  traj.segments.resize(n_dofs);
 
-  for (int j = 0; j < n_joints; ++j) {
-    // Extract waypoint values for this joint
+  for (int j = 0; j < n_dofs; ++j) {
+    // Extract waypoint values for this DOF
     std::vector<double> y(n_wp);
     for (int i = 0; i < n_wp; ++i) {
       y[i] = waypoints[i][j];

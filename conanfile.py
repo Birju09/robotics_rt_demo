@@ -22,6 +22,7 @@ class RoboticsRtDemoConan(ConanFile):
         self.requires("urdf/2.14.0")
         self.requires("urdfdom_headers/1.0.6")
         self.requires("urdfdom/4.0.0")
+        self.requires("rcutils/6.1.0")
         self.requires("rcpputils/2.10.0")
         self.requires("pluginlib/5.4.1")
         self.requires("class_loader/2.1.2")

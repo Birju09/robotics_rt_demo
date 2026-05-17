@@ -1,5 +1,6 @@
 #include "planner.hpp"
 
+#include <cstddef>
 #include <iostream>
 #include <ompl/base/SpaceInformation.h>
 #include <ompl/base/spaces/RealVectorStateSpace.h>
