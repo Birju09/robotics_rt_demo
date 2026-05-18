@@ -15,7 +15,7 @@ int main() {
 
     // Load robot model from URDF (FR3 only)
     std::cout << "Loading robot model..." << std::endl;
-    RobotModel robot("../../assets/franka_description/urdf/fr3.urdf");
+    RobotModel robot("/tmp/fr3.urdf");
     std::cout << "  Joint count: " << robot.numJoints() << std::endl;
     std::cout << "  Link meshes: " << robot.linkMeshes().size() << std::endl;
     std::cout << std::endl;

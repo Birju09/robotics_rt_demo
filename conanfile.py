@@ -29,6 +29,7 @@ class RoboticsRtDemoConan(ConanFile):
         self.requires("ament_index_cpp/1.8.0")
         self.requires("assimp/5.3.1")
         self.requires("tinyxml2/10.0.0")
+        self.requires("console_bridge/1.0.2")
         self.requires("franka_description/2.7.0")
 
     def generate(self):

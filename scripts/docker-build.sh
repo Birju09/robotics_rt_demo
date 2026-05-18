@@ -92,6 +92,8 @@ LOCAL_RECIPES=(
     "urdfdom:urdfdom:4.0.0"
     "ompl:ompl:1.7.0"
     "assimp:assimp:5.3.1"
+    "tinyxml2:tinyxml2:10.0.0"
+    "console_bridge:console_bridge:1.0.2"
     "franka_description:franka_description:2.7.0"
     "urdf:urdf:2.14.0"
     "rcutils:rcutils:6.1.0"

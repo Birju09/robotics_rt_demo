@@ -89,8 +89,15 @@ class FrankaDescriptionConan(ConanFile):
                         cwd=os.path.dirname(fr3_xacro)
                     )
                 if result.returncode != 0:
+                    self.output.error(f"xacro failed with return code {result.returncode}")
                     self.output.error(f"xacro stderr:\n{result.stderr}")
                     raise subprocess.CalledProcessError(result.returncode, result.args)
+
+                # Verify URDF file is not empty
+                urdf_size = os.path.getsize(fr3_urdf)
+                if urdf_size == 0:
+                    raise RuntimeError(f"xacro produced empty URDF file")
+                self.output.info(f"xacro produced URDF file ({urdf_size} bytes)")
 
                 # Post-process URDF to fix mesh paths
                 # The xacro ran from robots/fr3/, so paths are ../../meshes/robots/fr3/
@@ -124,9 +131,9 @@ class FrankaDescriptionConan(ConanFile):
 
                 self.output.info(f"Processed FR3 xacro to URDF: {fr3_urdf}")
                 self.output.info(f"Fixed mesh paths in URDF")
-            except (subprocess.CalledProcessError, FileNotFoundError) as e:
-                self.output.warning(f"xacro processing failed: {e}")
-                self.output.info("Packaging xacro file as-is")
+            except (subprocess.CalledProcessError, FileNotFoundError, RuntimeError) as e:
+                self.output.error(f"xacro processing failed: {e}")
+                raise
 
     def package(self):
         # Copy only FR3 URDF and relevant meshes

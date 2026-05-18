@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     software-properties-common \
     pkg-config \
+    ros-jazzy-xacro \
     && wget https://apt.llvm.org/llvm.sh -O /tmp/llvm.sh \
     && chmod +x /tmp/llvm.sh \
     && /tmp/llvm.sh 22 all \
