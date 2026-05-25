@@ -171,7 +171,8 @@ cd "$BUILD_DIR"
 echo "  Configuring CMake..."
 cmake "$PROJECT_ROOT" \
     -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-    -DCMAKE_TOOLCHAIN_FILE="conan_toolchain.cmake"
+    -DCMAKE_TOOLCHAIN_FILE="conan_toolchain.cmake" \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
 echo "  Building project (this may take a while)..."
 cmake --build . --config "$BUILD_TYPE" --parallel "$(nproc)"

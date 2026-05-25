@@ -10,10 +10,7 @@
       "description": "Base preset with Conan toolchain",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/${presetName}",
-      "toolchainFile": "${sourceDir}/build/conan_toolchain.cmake",
-      "cacheVariables": {
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
-      }
+      "toolchainFile": "${sourceDir}/build/conan_toolchain.cmake"
     },
     {
       "name": "debug",

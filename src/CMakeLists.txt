@@ -27,7 +27,13 @@ target_link_libraries(robot_core PUBLIC
     console_bridge::console_bridge
 )
 
-target_compile_features(robot_core PUBLIC cxx_std_23)
+target_compile_options(robot_core PRIVATE "-fsanitize=undefined")
+target_link_libraries(robot_core PRIVATE "-fsanitize=undefined")
+
+target_compile_options(robot_core PRIVATE
+    -fpass-plugin=$<TARGET_FILE:UBSanCountPlugin>)
+
+add_dependencies(robot_core UBSanCountPlugin)
 
 add_executable(panda_demo main.cpp)
 target_link_libraries(panda_demo PRIVATE robot_core)
@@ -42,9 +48,3 @@ install(TARGETS robot_core
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
 )
-
-target_compile_options(robot_core PRIVATE 
-        -fxray-instrument 
-        -fxray-instruction-threshold=100 
-        -fxray-ignore-loops
-    )

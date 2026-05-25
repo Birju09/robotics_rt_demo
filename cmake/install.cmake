@@ -7,7 +7,14 @@ install(CODE [[
     RESOLVED_DEPENDENCIES_VAR RESOLVED_DEPS
     UNRESOLVED_DEPENDENCIES_VAR UNRESOLVED_DEPS
     DIRECTORIES "/root/.conan2/p" "/usr/lib/llvm-22/lib"
-    PRE_EXCLUDE_REGEXES "libconsole_bridge" "libtinyxml2"
+    CONFLICTING_DEPENDENCIES_PREFIX CONFLICTING_DEPS
+    PRE_EXCLUDE_REGEXES
+      "ld-linux"        # dynamic linker — must not be bundled
+      "libc\\.so"       # glibc — ABI-tied to the kernel
+      "libpthread\\.so" # glibc threading
+      "libm\\.so"       # glibc math
+      "libdl\\.so"      # glibc dynamic loading
+      "librt\\.so"      # glibc realtime
   )
 
   # Install all resolved runtime dependencies
@@ -31,4 +38,21 @@ install(CODE [[
   if(UNRESOLVED_DEPS)
     message(WARNING "Unresolved runtime dependencies: ${UNRESOLVED_DEPS}")
   endif()
+
+  foreach(lib_name ${CONFLICTING_DEPS_FILENAMES})
+    set(paths ${CONFLICTING_DEPS_${lib_name}})
+    message(WARNING "Conflicting paths for ${lib_name}: ${paths}")
+    # Prefer Conan-managed libraries; fall back to the first candidate
+    set(chosen "")
+    foreach(path ${paths})
+      if(path MATCHES "/\\.conan2/" AND chosen STREQUAL "")
+        set(chosen "${path}")
+      endif()
+    endforeach()
+    if(chosen STREQUAL "")
+      list(GET paths 0 chosen)
+    endif()
+    message(STATUS "Installing conflicting dep (chosen): ${chosen}")
+    file(INSTALL "${chosen}" DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" FOLLOW_SYMLINK_CHAIN)
+  endforeach()
 ]])
