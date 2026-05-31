@@ -13,7 +13,7 @@ add_custom_command(
   COMMAND ${CMAKE_CXX_COMPILER}
           -std=c++17
           -fsanitize=undefined   # instrument with UBSan so handlers appear in IR
-          -S -emit-llvm          # emit human-readable IR instead of object code
+          -S -emit-llvm -g0      # emit human-readable IR instead of object code
           -O3
           -o ${TEST_IR}
           ${TEST_SRC}
@@ -25,9 +25,10 @@ add_custom_command(
 add_custom_target(test-ir ALL
   COMMAND ${OPT}
           -load-pass-plugin $<TARGET_FILE:UBSanCountPlugin>
-          -passes=print<ubsan-count>
-          -disable-output
+          "-passes=function(ubsan-signed-overflow-optimize),default<O3>"
           ${TEST_IR}
+          -S
+          -o ${TEST_IR}
   DEPENDS ${TEST_IR} UBSanCountPlugin
   COMMENT "Counting UBSan sites in test.ll"
   VERBATIM

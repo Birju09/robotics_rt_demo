@@ -1,5 +1,7 @@
 #include "UBSanCountPass.h"
 
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/LazyValueInfo.h"
 #include "llvm/Analysis/LoopInfo.h"
@@ -7,11 +9,13 @@
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Demangle/Demangle.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
+#include "llvm/IR/Analysis.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/PassManager.h"
@@ -24,7 +28,8 @@
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/Mem2Reg.h"
 #include <cstddef>
-#include <llvm-22/llvm/ADT/StringRef.h>
+#include <llvm-22/llvm/ADT/SmallPtrSet.h>
+#include <llvm-22/llvm/Transforms/Utils/ValueMapper.h>
 
 using namespace llvm;
 
@@ -181,69 +186,151 @@ static void straightenOverflowBranches(Function &F) {
 // clone, and read the operand ranges there. The original module is left intact,
 // so this behaves as a pure analysis that happens to reason about the
 // branchless form of each loop.
-struct UBSanCloneAnalysisPass
-    : public llvm::PassInfoMixin<UBSanCloneAnalysisPass> {
-  PreservedAnalyses run(Module &M, ModuleAnalysisManager &FAM) {
+struct UBSanSignedOverflowAnalysis
+    : public llvm::PassInfoMixin<UBSanSignedOverflowAnalysis> {
+  PreservedAnalyses run(Function &F, FunctionAnalysisManager &FAM) {
     // (1) Collect the overflow checks in the ORIGINAL function.
     constexpr size_t kMaxSize = 32;
     SmallVector<WithOverflowInst *, kMaxSize> OrigChecks;
-    for (Function &F : M) {
-      if (F.isDeclaration()) {
-        continue;
-      }
-      for (BasicBlock &BB : F) {
-        for (Instruction &I : BB) {
-          if (auto *WO = dyn_cast<WithOverflowInst>(&I)) {
-            OrigChecks.push_back(WO);
-          }
+    if (F.isDeclaration()) {
+      return PreservedAnalyses::none();
+    }
+    for (BasicBlock &BB : F) {
+      for (Instruction &I : BB) {
+        if (auto *WO = dyn_cast<WithOverflowInst>(&I)) {
+          OrigChecks.push_back(WO);
         }
       }
     }
+
     if (OrigChecks.empty()) {
       return PreservedAnalyses::all();
     }
 
-    TargetLibraryInfoImpl TLII(M.getTargetTriple());
-    for (Function &F : M) {
-      if (F.isDeclaration()) {
+    // (2) Clone F. VMap maps each original Value to its corresponding clone.
+    ValueToValueMapTy VMap;
+    Function *Clone = CloneFunction(&F, VMap);
+
+    // (3) Apply the speculative rewrite to the CLONE only.
+    straightenOverflowBranches(*Clone);
+
+    DominatorTree DT(*Clone);
+    LoopInfo LI(DT);
+    AssumptionCache AC(*Clone);
+    TargetLibraryInfo TLI = FAM.getResult<TargetLibraryAnalysis>(F);
+    ScalarEvolution SE(*Clone, TLI, AC, DT, LI);
+
+    // (4) For each original check, query SCEV on its clone twin via VMap.
+    for (WithOverflowInst *Orig : OrigChecks) {
+      Value *CV = VMap.lookup(Orig);
+      auto *Twin = dyn_cast_or_null<WithOverflowInst>(CV);
+      if (!Twin) {
         continue;
       }
-      // (2) Clone F. VMap maps each original Value to its corresponding clone.
-      ValueToValueMapTy VMap;
-      Function *Clone = CloneFunction(&F, VMap);
 
-      // (3) Apply the speculative rewrite to the CLONE only.
-      straightenOverflowBranches(*Clone);
+      ConstantRange Lhs = SE.getSignedRange(SE.getSCEV(Twin->getLHS()));
+      ConstantRange Rhs = SE.getSignedRange(SE.getSCEV(Twin->getRHS()));
 
-      DominatorTree DT(*Clone);
-      LoopInfo LI(DT);
-      AssumptionCache AC(*Clone);
-      TargetLibraryInfo TLI(TLII);
-      ScalarEvolution SE(*Clone, TLI, AC, DT, LI);
+      errs() << "[ubsan-clone] check in @" << demangle(F.getName()) << " ("
+             << Instruction::getOpcodeName(Orig->getBinaryOp())
+             << "): LHS=" << Lhs << " RHS=" << Rhs << "\n";
+      if (rangesProveNoOverflow(Twin, Lhs, Rhs))
+        errs() << "  => CAN BE REMOVED (proven on branchless clone)\n";
+      else
+        errs() << "  => keep (overflow not proven impossible)\n";
+    }
 
-      // (4) For each original check, query SCEV on its clone twin via VMap.
-      for (WithOverflowInst *Orig : OrigChecks) {
-        Value *CV = VMap.lookup(Orig);
-        auto *Twin = dyn_cast_or_null<WithOverflowInst>(CV);
-        if (!Twin)
-          continue;
+    // (5) Discard the clone; the real IR is untouched.
+    Clone->eraseFromParent();
+    return PreservedAnalyses::all();
+  }
+};
 
-        ConstantRange Lhs = SE.getSignedRange(SE.getSCEV(Twin->getLHS()));
-        ConstantRange Rhs = SE.getSignedRange(SE.getSCEV(Twin->getRHS()));
+constexpr size_t kMaxInstructions = 32;
+using OverflowInstructions = SmallVector<WithOverflowInst *, kMaxInstructions>;
 
-        errs() << "[ubsan-clone] check in @" << demangle(F.getName()) << " ("
-               << Instruction::getOpcodeName(Orig->getBinaryOp())
-               << "): LHS=" << Lhs << " RHS=" << Rhs << "\n";
-        if (rangesProveNoOverflow(Twin, Lhs, Rhs))
-          errs() << "  => CAN BE REMOVED (proven on branchless clone)\n";
-        else
-          errs() << "  => keep (overflow not proven impossible)\n";
+OverflowInstructions CollectOverflowInstructions(Function &F) {
+  OverflowInstructions Instructions;
+
+  for (auto &BB : F) {
+    for (auto &I : BB) {
+      if (auto WO = dyn_cast<WithOverflowInst>(&I)) {
+        Instructions.push_back(WO);
+      }
+    }
+  }
+  return Instructions;
+}
+
+using WOInstructionSet = SmallPtrSet<WithOverflowInst *, kMaxInstructions>;
+
+WOInstructionSet
+CollectRemovableFromClone(Function &Orig,
+                          OverflowInstructions &OriginalChecks) {
+  WOInstructionSet Removable;
+
+  ValueToValueMapTy VMap;
+  Function *Clone = CloneFunction(&Orig, VMap);
+
+  straightenOverflowBranches(*Clone);
+  DominatorTree DT(*Clone);
+  LoopInfo LI(DT);
+  AssumptionCache AC(*Clone);
+  TargetLibraryInfoImpl TLII(Orig.getParent()->getTargetTriple());
+  TargetLibraryInfo TLI(TLII);
+  ScalarEvolution SE(*Clone, TLI, AC, DT, LI);
+  for (WithOverflowInst *Orig : OriginalChecks) {
+    auto *Twin = dyn_cast_or_null<WithOverflowInst>(VMap.lookup(Orig));
+    if (!Twin) {
+      continue;
+    }
+    ConstantRange L = SE.getSignedRange(SE.getSCEV(Twin->getLHS()));
+    ConstantRange R = SE.getSignedRange(SE.getSCEV(Twin->getRHS()));
+    if (rangesProveNoOverflow(Twin, L, R)) {
+      Removable.insert(Orig);
+    }
+  }
+  Clone->eraseFromParent();
+
+  return Removable;
+}
+
+class UBSanSignedOverflowOptimize
+    : public PassInfoMixin<UBSanSignedOverflowOptimize> {
+public:
+  PreservedAnalyses run(Function &F, FunctionAnalysisManager &FAM) {
+    if (F.isDeclaration()) {
+      return PreservedAnalyses::all();
+    }
+
+    auto OriginalChecks = CollectOverflowInstructions(F);
+    if (OriginalChecks.empty()) {
+      return PreservedAnalyses::all();
+    }
+
+    auto Removable = CollectRemovableFromClone(F, OriginalChecks);
+
+    if (Removable.empty()) {
+      return PreservedAnalyses::all();
+    }
+
+    bool Changed = false;
+    for (WithOverflowInst *WO : OriginalChecks) {
+      if (!Removable.contains(WO)) {
+        continue;
       }
 
-      // (5) Discard the clone; the real IR is untouched.
-      Clone->eraseFromParent();
+      for (User *U : llvm::make_early_inc_range(WO->users())) {
+        auto *EV = dyn_cast<ExtractValueInst>(U);
+        if (EV && EV->getNumIndices() == 1 && EV->getIndices()[0] == 1) {
+          EV->replaceAllUsesWith(ConstantInt::getFalse(F.getContext()));
+          EV->eraseFromParent();
+          Changed = true;
+        }
+      }
     }
-    return PreservedAnalyses::all();
+
+    return Changed ? PreservedAnalyses::none() : PreservedAnalyses::all();
   }
 };
 
@@ -304,13 +391,15 @@ llvm::PassPluginLibraryInfo getUBSanCountPluginInfo() {
                   return false;
                 });
 
-            // 2b. Register "ubsan-check" as a *function* pipeline name so it
-            //     can be run with: opt -passes='function(ubsan-check)'
             PB.registerPipelineParsingCallback(
-                [](StringRef Name, ModulePassManager &FPM,
+                [](StringRef Name, FunctionPassManager &FPM,
                    ArrayRef<PassBuilder::PipelineElement>) {
-                  if (Name == "ubsan-clone-check") {
-                    FPM.addPass(UBSanCloneAnalysisPass());
+                  if (Name == "ubsan-signed-overflow-optimize") {
+                    FPM.addPass(UBSanSignedOverflowOptimize());
+                    return true;
+                  }
+                  if (Name == "ubsan-signed-overflow-check") {
+                    FPM.addPass(UBSanSignedOverflowAnalysis());
                     return true;
                   }
                   return false;
@@ -320,7 +409,6 @@ llvm::PassPluginLibraryInfo getUBSanCountPluginInfo() {
                                                   OptimizationLevel O,
                                                   ThinOrFullLTOPhase C) {
               MPM.addPass(UBSanCountPrinterPass(errs()));
-              MPM.addPass(UBSanCloneAnalysisPass());
             });
           }};
 }

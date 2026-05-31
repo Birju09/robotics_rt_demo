@@ -20,4 +20,4 @@ set_target_properties(UBSanCountPlugin PROPERTIES
 target_compile_options(UBSanCountPlugin PRIVATE -stdlib=libstdc++)
 target_link_options(UBSanCountPlugin PRIVATE -stdlib=libstdc++)
 
-#add_subdirectory(test)
+add_subdirectory(test)
