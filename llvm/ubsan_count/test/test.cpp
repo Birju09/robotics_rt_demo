@@ -24,13 +24,32 @@ Rotation testRotation(const Rotation &a) { return Rotation(a); }
 // In this function, the UBSAN optimization pass cannot prove that
 // signed overflow never occurs. So the instrumented code stays even after
 // optimization passes.
-std::array<double, 9> testCopy(int b, std::array<double, 9> data) {
-  if (b > 9) {
+std::array<double, 9> testCopy(int numsToCopy, std::array<double, 9> data) {
+  std::array<double, 9> output;
+  while (numsToCopy--) {
+    output[numsToCopy] = data[numsToCopy];
+  }
+  return output;
+}
+
+// Slightly modified example.
+// Here the check in the function can enable LazyValueInfo(LVI) to establish
+// bounds. This helps optimize away the check.
+std::array<double, 9> testCopyOptimized(int numsToCopy,
+                                        std::array<double, 9> data) {
+  if (numsToCopy > data.size() || numsToCopy < 1) {
     return {};
   }
+
+  // Do something else
+  int a = 0;
+  for (; a < 9; ++a) {
+    data[a] += 1;
+  }
+
   std::array<double, 9> output;
-  while (b--) {
-    output[b] = data[b];
+  while (numsToCopy--) {
+    output[numsToCopy] = data[numsToCopy];
   }
   return output;
 }

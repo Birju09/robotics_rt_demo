@@ -1,11 +1,13 @@
 #include "UBSanCountPass.h"
 
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/LazyValueInfo.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/ScalarEvolution.h"
+#include "llvm/Analysis/ScalarEvolutionExpressions.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Demangle/Demangle.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
@@ -13,6 +15,7 @@
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/ConstantRange.h"
+#include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instruction.h"
@@ -27,9 +30,11 @@
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/Mem2Reg.h"
+#include "llvm/Transforms/Utils/ValueMapper.h"
 #include <cstddef>
-#include <llvm-22/llvm/ADT/SmallPtrSet.h>
-#include <llvm-22/llvm/Transforms/Utils/ValueMapper.h>
+#include <llvm-22/llvm/ADT/APInt.h>
+#include <llvm-22/llvm/IR/Constant.h>
+#include <llvm-22/llvm/Support/Casting.h>
 
 using namespace llvm;
 
@@ -264,6 +269,57 @@ OverflowInstructions CollectOverflowInstructions(Function &F) {
 
 using WOInstructionSet = SmallPtrSet<WithOverflowInst *, kMaxInstructions>;
 
+static ConstantRange boundOverflowOperand(Value *V, ScalarEvolution &SE,
+                                          LoopInfo &LI, LazyValueInfo &LVI) {
+  const SCEV *S = SE.getSCEV(V);
+  auto *AR = dyn_cast<SCEVAddRecExpr>(S);
+
+  // The enclosing loop (for guard application), if any.
+  const Loop *L = nullptr;
+  if (AR) {
+    L = AR->getLoop();
+  } else if (auto *I = dyn_cast<Instruction>(V)) {
+    L = LI.getLoopFor(I->getParent());
+  }
+
+  ConstantRange R = SE.getSignedRange(S);
+  if (L) {
+    R = R.intersectWith(SE.getSignedRange(SE.applyLoopGuards(S, L)));
+  }
+
+  if (AR && AR->isAffine()) {
+    const SCEV *BTC = SE.getBackedgeTakenCount(L);
+    auto *StepC = dyn_cast<SCEVConstant>(AR->getStepRecurrence(SE));
+    if (StepC && !isa<SCEVCouldNotCompute>(BTC)) {
+      ConstantRange StartR = SE.getSignedRange(AR->getStart());
+      if (StartR.isFullSet())
+        if (auto *SU = dyn_cast<SCEVUnknown>(AR->getStart())) {
+          BasicBlock *Header = L->getHeader();
+          BasicBlock *Entry = nullptr;
+          for (BasicBlock *P : predecessors(Header))
+            if (!L->contains(P)) {
+              Entry = P;
+              break;
+            }
+          if (Entry)
+            StartR = LVI.getConstantRangeOnEdge(SU->getValue(), Entry, Header);
+        }
+
+      ConstantRange EndR = SE.getSignedRange(AR->evaluateAtIteration(BTC, SE));
+
+      if (!StartR.isFullSet() && !EndR.isFullSet()) {
+        bool Decreasing = StepC->getAPInt().isNegative();
+        bool Monotone = Decreasing
+                            ? StartR.getSignedMin().sge(EndR.getSignedMax())
+                            : StartR.getSignedMax().sle(EndR.getSignedMin());
+        if (Monotone)
+          R = R.intersectWith(StartR.unionWith(EndR));
+      }
+    }
+  }
+  return R;
+}
+
 WOInstructionSet
 CollectRemovableFromClone(Function &Orig,
                           OverflowInstructions &OriginalChecks) {
@@ -279,14 +335,16 @@ CollectRemovableFromClone(Function &Orig,
   TargetLibraryInfoImpl TLII(Orig.getParent()->getTargetTriple());
   TargetLibraryInfo TLI(TLII);
   ScalarEvolution SE(*Clone, TLI, AC, DT, LI);
+  LazyValueInfo LVI(&AC, &Clone->getDataLayout());
   for (WithOverflowInst *Orig : OriginalChecks) {
     auto *Twin = dyn_cast_or_null<WithOverflowInst>(VMap.lookup(Orig));
     if (!Twin) {
       continue;
     }
-    ConstantRange L = SE.getSignedRange(SE.getSCEV(Twin->getLHS()));
-    ConstantRange R = SE.getSignedRange(SE.getSCEV(Twin->getRHS()));
-    if (rangesProveNoOverflow(Twin, L, R)) {
+    ConstantRange Lhs = boundOverflowOperand(Twin->getLHS(), SE, LI, LVI);
+    ConstantRange Rhs = boundOverflowOperand(Twin->getRHS(), SE, LI, LVI);
+
+    if (rangesProveNoOverflow(Twin, Lhs, Rhs)) {
       Removable.insert(Orig);
     }
   }
