@@ -149,8 +149,9 @@ static void straightenOverflowBranches(Function &F) {
   for (WithOverflowInst *WO : WOs) {
     // The branch guarding the check is the terminator of the intrinsic's block.
     auto *Br = dyn_cast<BranchInst>(WO->getParent()->getTerminator());
-    if (!Br || !Br->isConditional())
+    if (!Br || !Br->isConditional()) {
       continue;
+    }
 
     // Of the two successors, the "handler" one contains a __ubsan_handle_*
     // call.

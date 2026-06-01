@@ -27,8 +27,7 @@ CollisionScene::CollisionScene(const RobotModel &model) : model_(model) {
     lco.bvh_model = bvh;
     // Will be updated per check
     lco.local_transform =
-        coal::Transform3s(coal::Matrix3s::Identity(),
-                          coal::Vec3s::Zero());
+        coal::Transform3s(coal::Matrix3s::Identity(), coal::Vec3s::Zero());
     lco.collision_obj = std::make_shared<coal::CollisionObject>(bvh);
 
     link_objects_.push_back(lco);
