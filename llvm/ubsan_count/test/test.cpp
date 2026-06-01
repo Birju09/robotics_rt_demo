@@ -41,12 +41,6 @@ std::array<double, 9> testCopyOptimized(int numsToCopy,
     return {};
   }
 
-  // Do something else
-  int a = 0;
-  for (; a < 9; ++a) {
-    data[a] += 1;
-  }
-
   std::array<double, 9> output;
   while (numsToCopy--) {
     output[numsToCopy] = data[numsToCopy];

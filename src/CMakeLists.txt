@@ -39,6 +39,12 @@ add_executable(panda_demo main.cpp)
 target_link_libraries(panda_demo PRIVATE robot_core)
 target_compile_features(panda_demo PRIVATE cxx_std_23)
 
+target_compile_options(panda_demo PRIVATE
+    -fsanitize=undefined
+    -fpass-plugin=$<TARGET_FILE:UBSanCountPlugin>)
+target_link_libraries(panda_demo PRIVATE "-fsanitize=undefined")
+add_dependencies(panda_demo UBSanCountPlugin)
+
 # Install targets
 install(TARGETS panda_demo
     RUNTIME DESTINATION bin

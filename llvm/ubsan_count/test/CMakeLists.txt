@@ -25,7 +25,7 @@ add_custom_command(
 add_custom_target(test-ir ALL
   COMMAND ${OPT}
           -load-pass-plugin $<TARGET_FILE:UBSanCountPlugin>
-          "-passes=function(ubsan-signed-overflow-optimize),default<O3>"
+          "-passes=function(ubsan-signed-overflow-optimize,ubsan-optimize-sret-nullchecks),default<O3>"
           ${TEST_IR}
           -S
           -o ${TEST_IR}

@@ -1,5 +1,6 @@
 #include "UBSanCountPass.h"
 
+#include "llvm/ADT/APInt.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
@@ -14,6 +15,7 @@
 #include "llvm/IR/Analysis.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CFG.h"
+#include "llvm/IR/Constant.h"
 #include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Dominators.h"
@@ -26,15 +28,16 @@
 #include "llvm/Passes/OptimizationLevel.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Plugins/PassPlugin.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Transforms/Scalar/SimplifyCFG.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/Mem2Reg.h"
 #include "llvm/Transforms/Utils/ValueMapper.h"
 #include <cstddef>
-#include <llvm-22/llvm/ADT/APInt.h>
-#include <llvm-22/llvm/IR/Constant.h>
-#include <llvm-22/llvm/Support/Casting.h>
+#include <llvm-22/llvm/IR/DerivedTypes.h>
+#include <llvm-22/llvm/IR/InstrTypes.h>
 
 using namespace llvm;
 
@@ -141,10 +144,13 @@ static bool checkIsRemovable(WithOverflowInst *WO, ScalarEvolution &SE,
 // SCEV compute the trip count (and hence bound the counter).
 static void straightenOverflowBranches(Function &F) {
   SmallVector<WithOverflowInst *, 8> WOs;
-  for (BasicBlock &BB : F)
-    for (Instruction &I : BB)
-      if (auto *WO = dyn_cast<WithOverflowInst>(&I))
+  for (BasicBlock &BB : F) {
+    for (Instruction &I : BB) {
+      if (auto *WO = dyn_cast<WithOverflowInst>(&I)) {
         WOs.push_back(WO);
+      }
+    }
+  }
 
   for (WithOverflowInst *WO : WOs) {
     // The branch guarding the check is the terminator of the intrinsic's block.
@@ -393,6 +399,92 @@ public:
   }
 };
 
+class UBSanOptimizeSretNullChecks
+    : public PassInfoMixin<UBSanOptimizeSretNullChecks> {
+public:
+  PreservedAnalyses run(Function &F, FunctionAnalysisManager &FAM) {
+    if (F.isDeclaration()) {
+      return PreservedAnalyses::all();
+    }
+
+    // Find `icmp eq <sret ptr>, null` comparisons. An sret pointer is
+    // guaranteed non-null by the ABI, so each such comparison is statically
+    // false and the UBSan null-check handler it guards is unreachable.
+    SmallVector<ICmpInst *, 8> NullChecks;
+    for (BasicBlock &BB : F) {
+      for (Instruction &I : BB) {
+        auto *ICmp = dyn_cast<ICmpInst>(&I);
+        if (ICmp && ICmp->getPredicate() == CmpInst::ICMP_EQ &&
+            comparesSretToNull(ICmp)) {
+          NullChecks.push_back(ICmp);
+        }
+      }
+    }
+
+    bool Changed = false;
+    for (ICmpInst *ICmp : NullChecks) {
+      errs() << "null check on sret arg in: " << demangle(F.getName()) << "\n";
+
+      if (auto *Br = dyn_cast<BranchInst>(ICmp->getParent()->getTerminator())) {
+        straightenHandlerBranch(Br);
+      }
+
+      ICmp->replaceAllUsesWith(ConstantInt::getFalse(ICmp->getContext()));
+      ICmp->eraseFromParent();
+      Changed = true;
+    }
+
+    return Changed ? PreservedAnalyses::none() : PreservedAnalyses::all();
+  }
+
+private:
+  // True when the comparison is between an sret-attributed argument and a null
+  // pointer constant (in either operand order).
+  static bool comparesSretToNull(ICmpInst *ICmp) {
+    bool SeenNull = false, SeenSret = false;
+    for (Value *Op : ICmp->operands()) {
+      if (isa<ConstantPointerNull>(Op)) {
+        SeenNull = true;
+      } else if (auto *Arg = dyn_cast<Argument>(Op)) {
+        SeenSret |= Arg->hasStructRetAttr();
+      }
+    }
+    return SeenNull && SeenSret;
+  }
+
+  static void straightenHandlerBranch(BranchInst *Br) {
+    if (!Br->isConditional()) {
+      return;
+    }
+
+    BasicBlock *HandlerBB = nullptr, *ContBB = nullptr;
+    for (BasicBlock *Succ : Br->successors()) {
+      bool IsHandler = false;
+      for (Instruction &I : *Succ) {
+        if (auto *CB = dyn_cast<CallBase>(&I)) {
+          if (isUBSanSite(*CB)) {
+            IsHandler = true;
+            break;
+          }
+        }
+      }
+      if (IsHandler) {
+        HandlerBB = Succ;
+      } else {
+        ContBB = Succ;
+      }
+    }
+    if (!HandlerBB || !ContBB) {
+      return;
+    }
+
+    ReplaceInstWithInst(Br, BranchInst::Create(ContBB));
+    if (pred_empty(HandlerBB)) {
+      DeleteDeadBlock(HandlerBB);
+    }
+  }
+};
+
 } // namespace
 
 UBSanCountResult UBSanCountAnalysis::run(Module &M, ModuleAnalysisManager &) {
@@ -461,9 +553,38 @@ llvm::PassPluginLibraryInfo getUBSanCountPluginInfo() {
                     FPM.addPass(UBSanSignedOverflowAnalysis());
                     return true;
                   }
+                  if (Name == "ubsan-optimize-sret-nullchecks") {
+                    FPM.addPass(UBSanOptimizeSretNullChecks());
+                    return true;
+                  }
                   return false;
                 });
 
+            // 3. Auto-inject the optimization passes into the default pipeline
+            //    so a regular `clang -fpass-plugin=...` build runs them.
+            //
+            //    EarlySimplification runs right after the basic input cleanup
+            //    (SROA/mem2reg/EarlyCSE/InstCombine), so the loop counter is
+            //    already in SSA form and ScalarEvolution can see it as an
+            //    add-recurrence -- the precondition UBSanSignedOverflowOptimize
+            //    needs. Crucially this is still BEFORE the loop optimizers and
+            //    the vectorizer, so removing the redundant UBSan checks here
+            //    lets all of those downstream passes (LICM, vectorization,
+            //    memcpy idiom, ...) optimize the now-unguarded loops. A trailing
+            //    SimplifyCFG folds the now-constant guard branches and deletes
+            //    the dead UBSan handler blocks.
+            PB.registerPipelineEarlySimplificationEPCallback(
+                [](ModulePassManager &MPM, OptimizationLevel O,
+                   ThinOrFullLTOPhase C) {
+                  FunctionPassManager FPM;
+                  FPM.addPass(UBSanSignedOverflowOptimize());
+                  FPM.addPass(UBSanOptimizeSretNullChecks());
+                  FPM.addPass(SimplifyCFGPass());
+                  MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
+                });
+
+            // Report the surviving UBSan site count at the very end of the
+            // pipeline (after everything else has run).
             PB.registerOptimizerLastEPCallback([](ModulePassManager &MPM,
                                                   OptimizationLevel O,
                                                   ThinOrFullLTOPhase C) {
