@@ -523,74 +523,63 @@ PreservedAnalyses UBSanCountPrinterPass::run(Module &M,
 }
 
 llvm::PassPluginLibraryInfo getUBSanCountPluginInfo() {
-  return {LLVM_PLUGIN_API_VERSION, "UBSanCount", LLVM_VERSION_STRING,
-          [](PassBuilder &PB) {
-            // 1. Register the analysis so other passes can query it via FAM.
-            PB.registerAnalysisRegistrationCallback(
-                [](ModuleAnalysisManager &MAM) {
-                  MAM.registerPass([&] { return UBSanCountAnalysis(); });
-                });
+  return {
+      LLVM_PLUGIN_API_VERSION, "UBSanCount", LLVM_VERSION_STRING,
+      [](PassBuilder &PB) {
+        // 1. Register the analysis so other passes can query it via FAM.
+        PB.registerAnalysisRegistrationCallback([](ModuleAnalysisManager &MAM) {
+          MAM.registerPass([&] { return UBSanCountAnalysis(); });
+        });
 
-            // 2. Register "print<ubsan-count>" as a pipeline name for opt.
-            PB.registerPipelineParsingCallback(
-                [](StringRef Name, ModulePassManager &MPM,
-                   ArrayRef<PassBuilder::PipelineElement>) {
-                  if (Name == "print<ubsan-count>") {
-                    MPM.addPass(UBSanCountPrinterPass(errs()));
-                    return true;
-                  }
-                  return false;
-                });
-
-            PB.registerPipelineParsingCallback(
-                [](StringRef Name, FunctionPassManager &FPM,
-                   ArrayRef<PassBuilder::PipelineElement>) {
-                  if (Name == "ubsan-signed-overflow-optimize") {
-                    FPM.addPass(UBSanSignedOverflowOptimize());
-                    return true;
-                  }
-                  if (Name == "ubsan-signed-overflow-check") {
-                    FPM.addPass(UBSanSignedOverflowAnalysis());
-                    return true;
-                  }
-                  if (Name == "ubsan-optimize-sret-nullchecks") {
-                    FPM.addPass(UBSanOptimizeSretNullChecks());
-                    return true;
-                  }
-                  return false;
-                });
-
-            // 3. Auto-inject the optimization passes into the default pipeline
-            //    so a regular `clang -fpass-plugin=...` build runs them.
-            //
-            //    EarlySimplification runs right after the basic input cleanup
-            //    (SROA/mem2reg/EarlyCSE/InstCombine), so the loop counter is
-            //    already in SSA form and ScalarEvolution can see it as an
-            //    add-recurrence -- the precondition UBSanSignedOverflowOptimize
-            //    needs. Crucially this is still BEFORE the loop optimizers and
-            //    the vectorizer, so removing the redundant UBSan checks here
-            //    lets all of those downstream passes (LICM, vectorization,
-            //    memcpy idiom, ...) optimize the now-unguarded loops. A trailing
-            //    SimplifyCFG folds the now-constant guard branches and deletes
-            //    the dead UBSan handler blocks.
-            PB.registerPipelineEarlySimplificationEPCallback(
-                [](ModulePassManager &MPM, OptimizationLevel O,
-                   ThinOrFullLTOPhase C) {
-                  FunctionPassManager FPM;
-                  FPM.addPass(UBSanSignedOverflowOptimize());
-                  FPM.addPass(UBSanOptimizeSretNullChecks());
-                  FPM.addPass(SimplifyCFGPass());
-                  MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
-                });
-
-            // Report the surviving UBSan site count at the very end of the
-            // pipeline (after everything else has run).
-            PB.registerOptimizerLastEPCallback([](ModulePassManager &MPM,
-                                                  OptimizationLevel O,
-                                                  ThinOrFullLTOPhase C) {
-              MPM.addPass(UBSanCountPrinterPass(errs()));
+        // 2. Register "print<ubsan-count>" as a pipeline name for opt.
+        PB.registerPipelineParsingCallback(
+            [](StringRef Name, ModulePassManager &MPM,
+               ArrayRef<PassBuilder::PipelineElement>) {
+              if (Name == "print<ubsan-count>") {
+                MPM.addPass(UBSanCountPrinterPass(errs()));
+                return true;
+              }
+              return false;
             });
-          }};
+
+        PB.registerPipelineParsingCallback(
+            [](StringRef Name, FunctionPassManager &FPM,
+               ArrayRef<PassBuilder::PipelineElement>) {
+              if (Name == "ubsan-signed-overflow-optimize") {
+                FPM.addPass(UBSanSignedOverflowOptimize());
+                return true;
+              }
+              if (Name == "ubsan-signed-overflow-check") {
+                FPM.addPass(UBSanSignedOverflowAnalysis());
+                return true;
+              }
+              if (Name == "ubsan-optimize-sret-nullchecks") {
+                FPM.addPass(UBSanOptimizeSretNullChecks());
+                return true;
+              }
+              return false;
+            });
+
+        // 3. Auto-inject the optimization passes into the default pipeline
+        //    so a regular `clang -fpass-plugin=...` build runs them.
+        PB.registerPipelineEarlySimplificationEPCallback(
+            [](ModulePassManager &MPM, OptimizationLevel O,
+               ThinOrFullLTOPhase C) {
+              FunctionPassManager FPM;
+              FPM.addPass(UBSanSignedOverflowOptimize());
+              FPM.addPass(UBSanOptimizeSretNullChecks());
+              FPM.addPass(SimplifyCFGPass());
+              MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
+            });
+
+        // Report the surviving UBSan site count at the very end of the
+        // pipeline (after everything else has run).
+        PB.registerOptimizerLastEPCallback([](ModulePassManager &MPM,
+                                              OptimizationLevel O,
+                                              ThinOrFullLTOPhase C) {
+          MPM.addPass(UBSanCountPrinterPass(errs()));
+        });
+      }};
 }
 
 extern "C" LLVM_ATTRIBUTE_WEAK llvm::PassPluginLibraryInfo
