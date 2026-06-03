@@ -9,6 +9,18 @@
 #include <kdl/chainfksolverpos_recursive.hpp>
 #include <ompl/base/spaces/RealVectorStateSpace.h>
 
+namespace {
+
+coal::Transform3s kdlToCoal(const KDL::Frame &f) {
+  coal::Matrix3s rot;
+  for (int r = 0; r < 3; ++r)
+    for (int c = 0; c < 3; ++c)
+      rot(r, c) = f.M(r, c);
+  return coal::Transform3s(rot, coal::Vec3s(f.p.x(), f.p.y(), f.p.z()));
+}
+
+} // namespace
+
 CollisionScene::CollisionScene(const RobotModel &model) : model_(model) {
   adjacency_.resize(model.numJoints());
 
@@ -26,8 +38,7 @@ CollisionScene::CollisionScene(const RobotModel &model) : model_(model) {
     lco.link_name = link_mesh.link_name;
     lco.bvh_model = bvh;
     // Will be updated per check
-    lco.local_transform =
-        coal::Transform3s(coal::Matrix3s::Identity(), coal::Vec3s::Zero());
+    lco.local_transform = kdlToCoal(link_mesh.visual_offset);
     lco.collision_obj = std::make_shared<coal::CollisionObject>(bvh);
 
     link_objects_.push_back(lco);
@@ -124,18 +135,16 @@ void CollisionScene::buildAdjacencyList() {
 
 void CollisionScene::updateCollisionTransforms(
     const std::vector<double> &q) const {
-  // NOTE: This is a placeholder implementation.
-  // Collision transforms are currently fixed at load time.
-  // A proper implementation would:
-  // 1. Access the KDL chain from the robot model
-  // 2. Compute FK to each link's frame
-  // 3. Update the collision object's transform in the world frame
-  //
-  // This is acceptable for a demo; production systems should expose the chain
-  // from RobotModel and properly update transforms on each collision check.
-
-  // Avoid unused parameter warning
-  (void)q;
+  for (const auto &lco : link_objects_) {
+    KDL::Frame link_world;
+    if (!model_.fkLink(q, lco.link_name, link_world)) {
+      continue;
+    }
+    // world_T_mesh = world_T_link * link_T_mesh
+    coal::Transform3s tf = kdlToCoal(link_world) * lco.local_transform;
+    lco.collision_obj->setTransform(tf);
+    lco.collision_obj->computeAABB();
+  }
 }
 
 bool CollisionScene::checkCollisions() const {

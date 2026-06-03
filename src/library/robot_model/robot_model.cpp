@@ -66,6 +66,23 @@ RobotModel::RobotModel(const std::string &urdf_path) {
 
 int RobotModel::numJoints() const { return kdl_chain_.getNrOfJoints(); }
 
+bool RobotModel::fkLink(const std::vector<double> &q,
+                        const std::string &link_name,
+                        KDL::Frame &out_frame) const {
+  KDL::JntArray q_kdl(kdl_chain_.getNrOfJoints());
+  for (size_t i = 0; i < q.size(); ++i)
+    q_kdl(i) = q[i];
+
+  // KDL segments are named after the link they attach to (from kdl_parser).
+  // JntToCart(q, frame, seg_nr) computes FK through the first seg_nr segments,
+  // so passing (i+1) gives the world frame at the end of segment i.
+  for (unsigned int i = 0; i < kdl_chain_.getNrOfSegments(); ++i) {
+    if (kdl_chain_.getSegment(i).getName() == link_name)
+      return fk_solver_->JntToCart(q_kdl, out_frame, static_cast<int>(i + 1)) >= 0;
+  }
+  return false;
+}
+
 bool RobotModel::fk(const std::vector<double> &q, KDL::Frame &out_frame) const {
   if (q.size() != static_cast<size_t>(kdl_chain_.getNrOfJoints())) {
     std::cerr << "FK: joint size mismatch. Expected "

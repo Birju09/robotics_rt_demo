@@ -48,6 +48,15 @@ public:
   //! @return true if FK succeeds, false otherwise
   bool fk(const std::vector<double> &q, KDL::Frame &out_frame) const;
 
+  //! Forward kinematics to a specific link in the chain.
+  //!
+  //! @param q Joint positions
+  //! @param link_name Name of the link (must appear as a segment in the chain)
+  //! @param out_frame Output world frame of that link
+  //! @return true if the link was found and FK succeeded, false otherwise
+  bool fkLink(const std::vector<double> &q, const std::string &link_name,
+              KDL::Frame &out_frame) const;
+
   //! Inverse kinematics: Cartesian target -> joint configuration.
   //!
   //! @param target Target end-effector frame
