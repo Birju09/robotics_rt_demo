@@ -4,10 +4,12 @@
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
+#include <chrono>
 #include <coal/broadphase/broadphase_callbacks.h>
 #include <coal/broadphase/broadphase_dynamic_AABB_tree.h>
 #include <coal/collision.h>
 #include <coal/distance.h>
+#include <iomanip>
 #include <iostream>
 #include <kdl/chainfksolverpos_recursive.hpp>
 #include <ompl/base/spaces/RealVectorStateSpace.h>
@@ -109,6 +111,28 @@ CollisionScene::CollisionScene(const RobotModel &model, Mode mode)
             << " broadphase)" << std::endl;
 }
 
+void CollisionScene::TimingStats::record(double ms) {
+  ++count;
+  total_ms += ms;
+  if (ms < min_ms)
+    min_ms = ms;
+  if (ms > max_ms)
+    max_ms = ms;
+}
+
+double CollisionScene::TimingStats::avg_ms() const {
+  return count > 0 ? total_ms / static_cast<double>(count) : 0.0;
+}
+
+void CollisionScene::TimingStats::print(const char *label) const {
+  std::cout << "  " << label << ":"
+            << " calls=" << count << std::fixed << std::setprecision(4)
+            << "  total=" << total_ms << "ms"
+            << "  avg=" << avg_ms() << "ms"
+            << "  min=" << (count > 0 ? min_ms : 0.0) << "ms"
+            << "  max=" << max_ms << "ms" << std::endl;
+}
+
 bool CollisionScene::isCollisionFree(const std::vector<double> &q) const {
   if (q.size() != static_cast<size_t>(model_.numJoints())) {
     std::cerr << "CollisionScene::isCollisionFree: joint size mismatch"
@@ -116,8 +140,36 @@ bool CollisionScene::isCollisionFree(const std::vector<double> &q) const {
     return false;
   }
 
+  using Clock = std::chrono::steady_clock;
+
+  auto t0 = Clock::now();
   updateCollisionTransforms(q);
-  return checkCollisions();
+  auto t1 = Clock::now();
+  bool result = checkCollisions();
+  auto t2 = Clock::now();
+
+  auto to_ms = [](Clock::duration d) {
+    return std::chrono::duration<double, std::milli>(d).count();
+  };
+  update_stats_.record(to_ms(t1 - t0));
+  collide_stats_.record(to_ms(t2 - t1));
+
+  return result;
+}
+
+void CollisionScene::logTimingStats() const {
+  std::cout << "\n=== CollisionScene Timing (" << update_stats_.count
+            << " checks) ===" << std::endl;
+  update_stats_.print("updateTransforms");
+  collide_stats_.print("broadphaseCollide");
+
+  const double total = update_stats_.total_ms + collide_stats_.total_ms;
+  const double avg = update_stats_.count > 0
+                         ? total / static_cast<double>(update_stats_.count)
+                         : 0.0;
+  std::cout << std::fixed << std::setprecision(4)
+            << "  total (both phases): " << total << "ms"
+            << "  avg/check: " << avg << "ms" << std::endl;
 }
 
 ompl::base::StateValidityCheckerFn CollisionScene::makeOMPLChecker(

@@ -109,6 +109,8 @@ int main(int argc, char *argv[]) {
     planner.stop();
     rt_executor.stop();
 
+    collision.logTimingStats();
+
     std::cout << "Demo complete." << std::endl;
     return 0;
 

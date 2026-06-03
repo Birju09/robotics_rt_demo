@@ -6,6 +6,7 @@
 #include <coal/BVH/BVH_model.h>
 #include <coal/broadphase/broadphase_collision_manager.h>
 #include <coal/collision.h>
+#include <cstdint>
 #include <kdl/frames.hpp>
 #include <memory>
 #include <ompl/base/SpaceInformation.h>
@@ -35,6 +36,9 @@ public:
   //! @return true if no collisions, false otherwise
   bool isCollisionFree(const std::vector<double> &q) const;
 
+  //! Print accumulated timing stats for update and collide phases.
+  void logTimingStats() const;
+
   //! Create an OMPL state validity checker function.
   //!
   //! @param si SpaceInformation for the OMPL problem
@@ -56,6 +60,20 @@ private:
 
   // Set of "nameA:::nameB" (both orderings) for kinematically adjacent links
   std::unordered_set<std::string> adjacent_pairs_;
+
+  struct TimingStats {
+    uint64_t count = 0;
+    double total_ms = 0.0;
+    double min_ms = 1e18;
+    double max_ms = 0.0;
+
+    void record(double ms);
+    double avg_ms() const;
+    void print(const char *label) const;
+  };
+
+  mutable TimingStats update_stats_;
+  mutable TimingStats collide_stats_;
 
   //! Load a mesh file and create a COAL BVH model.
   //!
