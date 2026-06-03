@@ -12,26 +12,13 @@ endif()
 # Use link paths for RPATH to help executables find their libraries
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
-
-find_package(ompl REQUIRED)
-find_package(Boost REQUIRED)
-find_package(Eigen3 REQUIRED)
-find_package(coal REQUIRED)
-find_package(orocos-kdl REQUIRED)
-find_package(kdl_parser REQUIRED)
-find_package(rcpputils REQUIRED)
-find_package(class_loader REQUIRED)
-find_package(ament_index_cpp REQUIRED)
-find_package(pluginlib REQUIRED)
-find_package(urdf REQUIRED)
-find_package(urdfdom_headers REQUIRED)
-find_package(urdfdom REQUIRED)
-find_package(assimp REQUIRED)
-find_package(TinyXML2 REQUIRED)
+# Third party
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/third_party.cmake)
 
 add_subdirectory(llvm)
 add_subdirectory(tests/examples)
 add_subdirectory(src)
+add_subdirectory(app)
 
 # Install configuration
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/install.cmake)

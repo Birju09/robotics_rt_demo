@@ -40,6 +40,12 @@ ENV PATH="/opt/venv/bin:$PATH"
 RUN /opt/venv/bin/pip install --upgrade pip && \
     /opt/venv/bin/pip install conan catkin_pkg empy==3.3.4
 
+# Install OpenCL
+RUN apt-get update && apt-get install -y \
+    opencl-headers \
+    ocl-icd-opencl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 # Set CC and CXX to use clang 22
 ENV CC=clang-22 \
     CXX=clang++-22

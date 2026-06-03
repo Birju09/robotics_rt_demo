@@ -3,3 +3,4 @@ build/*
 .claude/*
 install/*
 *.ll
+imx95*

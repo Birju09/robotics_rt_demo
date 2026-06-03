@@ -1,0 +1,5 @@
+add_subdirectory(collision_detection)
+add_subdirectory(motion_planning)
+add_subdirectory(robot_model)
+add_subdirectory(rt_executor)
+add_subdirectory(trajectory)
