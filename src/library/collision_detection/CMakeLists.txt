@@ -13,6 +13,7 @@ target_link_libraries(collision_detection PRIVATE
     rcpputils::rcpputils
     console_bridge::console_bridge
     robot_model
+    coal_gpu_collision_manager
 )
 
 target_link_libraries(collision_detection PUBLIC

@@ -35,7 +35,8 @@ public:
   //!
   //! @param urdf_path Absolute path to the URDF file (e.g.,
   //! "assets/franka_description/urdf/fr3.urdf")
-  //! @throws std::runtime_error if URDF parse fails or KDL chain extraction fails
+  //! @throws std::runtime_error if URDF parse fails or KDL chain extraction
+  //! fails
   explicit RobotModel(const std::string &urdf_path);
 
   //! Number of joints in the kinematic chain.
@@ -76,11 +77,19 @@ public:
   //! Access link meshes for collision scene construction.
   const std::vector<LinkMesh> &linkMeshes() const { return link_meshes_; }
 
+  //! Pairs of link names directly connected by a joint (used to skip
+  //! self-collision checks between physically touching links).
+  const std::vector<std::pair<std::string, std::string>> &
+  adjacentLinkPairs() const {
+    return adjacent_link_pairs_;
+  }
+
 private:
   KDL::Tree kdl_tree_;
   KDL::Chain kdl_chain_; // "fr3_link0" -> "fr3_hand"
 
   std::vector<LinkMesh> link_meshes_;
+  std::vector<std::pair<std::string, std::string>> adjacent_link_pairs_;
   std::vector<double> q_min_, q_max_; // joint limits
 
   // KDL solvers (mutable for const correctness in FK/IK calls)
@@ -96,7 +105,8 @@ private:
                                   const std::string &tip_link);
 
   //! Walk URDF links and collect visual mesh information.
-  void extractLinkMeshes(const urdf::ModelInterface &urdf_model);
+  void extractLinkMeshes(const urdf::ModelInterface &urdf_model,
+                         const std::string &urdf_dir);
 
   //! Print KDL tree structure for debugging.
   void printKDLTree() const;

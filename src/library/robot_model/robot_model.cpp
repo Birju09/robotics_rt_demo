@@ -1,5 +1,6 @@
 #include "robot_model.hpp"
 
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <kdl/chainfksolverpos_recursive.hpp>
@@ -58,7 +59,17 @@ RobotModel::RobotModel(const std::string &urdf_path) {
   }
 
   // Extract visual meshes for collision checking
-  extractLinkMeshes(urdf_model);
+  const std::string urdf_dir =
+      std::filesystem::path(urdf_path).parent_path().string();
+  extractLinkMeshes(urdf_model, urdf_dir);
+
+  // Build adjacent link pairs from URDF joints
+  for (const auto &[joint_name, joint] : urdf_model.joints_) {
+    if (joint->parent_link_name.empty() || joint->child_link_name.empty())
+      continue;
+    adjacent_link_pairs_.emplace_back(joint->parent_link_name,
+                                      joint->child_link_name);
+  }
 
   std::cout << "RobotModel initialized: " << kdl_chain_.getNrOfJoints()
             << " joints, " << link_meshes_.size() << " meshes" << std::endl;
@@ -226,29 +237,33 @@ void RobotModel::extractChainAndInitSolvers(const std::string &base_link,
       kdl_chain_, q_min_kdl, q_max_kdl, *fk_solver_, *ik_vel_solver_);
 }
 
-void RobotModel::extractLinkMeshes(const urdf::ModelInterface &urdf_model) {
+void RobotModel::extractLinkMeshes(const urdf::ModelInterface &urdf_model,
+                                   const std::string &urdf_dir) {
   for (const auto &[link_name, link] : urdf_model.links_) {
-    if (!link->visual || !link->visual->geometry) {
+    if (!link->collision || !link->collision->geometry) {
       continue;
     }
 
-    // Only handle mesh geometries for now
-    if (link->visual->geometry->type != urdf::Geometry::MESH) {
+    if (link->collision->geometry->type != urdf::Geometry::MESH) {
       continue;
     }
 
+    // static_cast is safe here: geometry->type == MESH was verified above.
+    // dynamic_cast fails across shared library boundaries due to RTTI mismatch.
     const auto *mesh_geom =
-        dynamic_cast<const urdf::Mesh *>(link->visual->geometry.get());
-    if (!mesh_geom) {
-      continue;
-    }
+        static_cast<const urdf::Mesh *>(link->collision->geometry.get());
 
     LinkMesh lm;
     lm.link_name = link_name;
-    lm.mesh_path = mesh_geom->filename;
+    const std::filesystem::path raw(mesh_geom->filename);
+    lm.mesh_path = raw.is_absolute()
+                       ? raw.string()
+                       : std::filesystem::weakly_canonical(
+                             std::filesystem::path(urdf_dir) / raw)
+                             .string();
 
-    // Extract visual offset transform
-    const urdf::Pose &pose = link->visual->origin;
+    // Use collision geometry origin as the mesh offset in link frame
+    const urdf::Pose &pose = link->collision->origin;
     double x = pose.position.x, y = pose.position.y, z = pose.position.z;
     double rx = pose.rotation.x, ry = pose.rotation.y, rz = pose.rotation.z,
            rw = pose.rotation.w;
@@ -257,4 +272,5 @@ void RobotModel::extractLinkMeshes(const urdf::ModelInterface &urdf_model) {
 
     link_meshes_.push_back(lm);
   }
+
 }

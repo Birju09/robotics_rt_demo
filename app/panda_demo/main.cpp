@@ -3,26 +3,40 @@
 #include "robot_model.hpp"
 #include "rt_executor.hpp"
 
+#include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <kdl/frames.hpp>
 #include <thread>
 
-int main() {
+int main(int argc, char *argv[]) {
+  CollisionScene::Mode mode = CollisionScene::Mode::CPU;
+  for (int i = 1; i < argc; ++i) {
+    std::string arg(argv[i]);
+    if (arg == "--gpu") {
+      mode = CollisionScene::Mode::GPU;
+    } else if (arg == "--cpu") {
+      mode = CollisionScene::Mode::CPU;
+    } else {
+      std::cerr << "Usage: " << argv[0] << " [--cpu|--gpu]" << std::endl;
+      return 1;
+    }
+  }
+
   try {
     std::cout << "=== Franka Panda RT Motion Planning Demo ===" << std::endl;
     std::cout << std::endl;
 
     // Load robot model from URDF (FR3 only)
     std::cout << "Loading robot model..." << std::endl;
-    RobotModel robot("/tmp/fr3.urdf");
+    RobotModel robot("/tmp/franka_description/urdf/fr3.urdf");
     std::cout << "  Joint count: " << robot.numJoints() << std::endl;
     std::cout << "  Link meshes: " << robot.linkMeshes().size() << std::endl;
     std::cout << std::endl;
 
     // Create collision scene
     std::cout << "Initializing collision scene..." << std::endl;
-    CollisionScene collision(robot);
+    CollisionScene collision(robot, mode);
     std::cout << std::endl;
 
     // Create and start RT executor

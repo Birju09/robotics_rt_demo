@@ -4,10 +4,12 @@
 #include "robot_model.hpp"
 
 #include <coal/BVH/BVH_model.h>
+#include <coal/broadphase/broadphase_collision_manager.h>
 #include <coal/collision.h>
 #include <kdl/frames.hpp>
 #include <memory>
 #include <ompl/base/SpaceInformation.h>
+#include <unordered_set>
 #include <vector>
 
 //! CollisionScene manages collision detection for the robot using COAL.
@@ -18,10 +20,14 @@
 //!  - Provide an OMPL-compatible state validity checker
 class CollisionScene {
 public:
+  enum class Mode { CPU, GPU };
+
   //! Construct collision scene from robot model.
   //!
   //! @param model RobotModel with link meshes
-  explicit CollisionScene(const RobotModel &model);
+  //! @param mode  CPU uses NaiveCollisionManager; GPU uses
+  //! CoalGPUCollisionManager
+  explicit CollisionScene(const RobotModel &model, Mode mode);
 
   //! Check if a robot configuration is collision-free.
   //!
@@ -46,9 +52,10 @@ private:
 
   std::vector<LinkCollisionObject> link_objects_;
   const RobotModel &model_;
+  std::unique_ptr<coal::BroadPhaseCollisionManager> broadphase_;
 
-  // Adjacency list for links that should skip collision checks
-  std::vector<std::vector<int>> adjacency_;
+  // Set of "nameA:::nameB" (both orderings) for kinematically adjacent links
+  std::unordered_set<std::string> adjacent_pairs_;
 
   //! Load a mesh file and create a COAL BVH model.
   //!
